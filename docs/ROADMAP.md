@@ -12,3 +12,7 @@
 ---
 
 These dates are **targets**, not guarantees.  Track detailed tasks in GitHub Issues & Projects. 
+
+## Progress
+
+- [x] CLI skeleton (encode/decode PNG round-trip) – v0.1.1 
