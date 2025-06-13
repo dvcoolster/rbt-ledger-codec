@@ -1,0 +1,2 @@
+# Training scripts are run manually on GPU, not in CI
+# Dependabot should ignore .train/ directory dependencies 

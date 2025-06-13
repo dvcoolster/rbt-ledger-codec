@@ -4,6 +4,7 @@
 //! It supports no-std environments and optional tract integration for inference.
 
 #![cfg_attr(not(feature = "std"), no_std)]
+#![cfg_attr(not(feature = "flownet"), allow(dead_code, unused_imports))]
 
 // Core imports
 #[cfg(not(feature = "std"))]
@@ -14,9 +15,10 @@ use alloc::{boxed::Box, vec::Vec};
 #[cfg(feature = "std")]
 use std::boxed::Box;
 
+#[cfg(feature = "flownet")]
 use ndarray::Array3;
 
-#[cfg(feature = "tract")]
+#[cfg(all(feature = "flownet", feature = "tract"))]
 use tract_onnx::prelude::*;
 
 /// Error types for FlowNet operations
@@ -35,6 +37,7 @@ pub enum FlowNetError {
 pub type Result<T> = core::result::Result<T, FlowNetError>;
 
 /// FlowNet model for invertible transformations
+#[cfg(feature = "flownet")]
 pub struct FlowNet {
     /// Number of flow levels
     levels: usize,
@@ -47,6 +50,7 @@ pub struct FlowNet {
     model: Option<SimplePlan<TypedFact, Box<dyn TypedOp>, Graph<TypedFact, Box<dyn TypedOp>>>>,
 }
 
+#[cfg(feature = "flownet")]
 impl FlowNet {
     /// Create a new FlowNet instance
     pub fn new(levels: usize, depth: usize) -> Self {
@@ -116,6 +120,27 @@ impl FlowNet {
     }
 }
 
+/// Stub FlowNet when feature is disabled
+#[cfg(not(feature = "flownet"))]
+pub struct FlowNet {
+    _dummy: u8,
+}
+
+#[cfg(not(feature = "flownet"))]
+impl FlowNet {
+    pub fn new(_levels: usize, _depth: usize) -> Self {
+        Self { _dummy: 0 }
+    }
+    
+    pub fn default() -> Self {
+        Self::new(4, 4)
+    }
+}
+
+/// Windows FlowNet workaround
+#[cfg(all(windows, feature = "flownet"))]
+compile_error!("FlowNet feature not yet supported on Windows.");
+
 /// C FFI interface
 #[no_mangle]
 pub extern "C" fn flownet_new(levels: usize, depth: usize) -> *mut FlowNet {
@@ -162,13 +187,24 @@ mod tests {
     #[test]
     fn test_flownet_creation() {
         let flow = FlowNet::new(4, 4);
-        assert_eq!(flow.levels, 4);
-        assert_eq!(flow.depth, 4);
-        assert!(!flow.loaded);
+        #[cfg(feature = "flownet")]
+        {
+            assert_eq!(flow.levels, 4);
+            assert_eq!(flow.depth, 4);
+            assert!(!flow.loaded);
+        }
+        #[cfg(not(feature = "flownet"))]
+        {
+            // Just test that it doesn't panic
+            assert_eq!(flow._dummy, 0);
+        }
     }
 
     #[test]
+    #[cfg(feature = "flownet")]
     fn test_encode_decode_identity() {
+        use ndarray::Array3;
+        
         let mut flow = FlowNet::default();
         // Simulate loading weights
         flow.loaded = true;

@@ -8,5 +8,10 @@ members = [
 ]
 
 [workspace.package]
-edition = "2024"
-version = "0.0.1" 
+edition = "2021"
+version = "0.0.1"
+
+
+
+[workspace.dependencies]
+flownet = { path = "./flownet" } 

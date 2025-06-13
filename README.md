@@ -28,6 +28,10 @@ cargo test --workspace --release
 
 See [demo walkthrough](docs/demo_walkthrough.md) for a complete encode/decode demonstration with the rzp CLI tool.
 
+### FlowNet Training
+
+FlowNet training scripts are located in `.train/python/` and run manually on GPU hardware, not in CI. See `.train/python/train.py` for usage.
+
 Other components (CUDA kernels, web app, Lean proofs) have their own README files.
 
 ---
