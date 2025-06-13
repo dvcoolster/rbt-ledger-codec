@@ -1,10 +1,8 @@
 # Tests for rzp CLI
 
-set(RZP_PATH $<TARGET_FILE:rzp>)
-
 add_executable(rzp_cli_test cli_roundtrip.cpp)
 
-target_compile_definitions(rzp_cli_test PRIVATE RZP_BIN_PATH="\"${RZP_PATH}\"")
+target_compile_definitions(rzp_cli_test PRIVATE RZP_BIN_PATH="$<TARGET_FILE:rzp>")
 
 target_link_libraries(rzp_cli_test PRIVATE ledgerizer)
 
