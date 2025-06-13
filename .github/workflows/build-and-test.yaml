@@ -17,27 +17,42 @@ jobs:
             target: x86_64-apple-darwin
           - os: windows-latest
             target: x86_64-pc-windows-msvc
+          - os: ubuntu-latest
+            target: wasm32-unknown-unknown
     runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@v4
-      - name: Install Rust
+      - name: Install Rust toolchain
         uses: actions-rs/toolchain@v1
         with:
           toolchain: stable
           override: true
-      - name: Cache cargo
+          target: ${{ matrix.target }}
+      - name: Cache cargo registry + target
         uses: actions/cache@v4
         with:
           path: |
             ~/.cargo/registry
             ~/.cargo/git
             target
-          key: ${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.lock') }}
-      - name: Build & Test
+          key: ${{ runner.os }}-cargo-${{ matrix.target }}-${{ hashFiles('**/Cargo.lock') }}
+      - name: Build & Test (native targets)
+        if: matrix.target != 'wasm32-unknown-unknown'
         run: cargo test --all --release
+      - name: Build rbtzip.wasm
+        if: matrix.target == 'wasm32-unknown-unknown'
+        run: |
+          cargo build -p rbtcli --release --target wasm32-unknown-unknown
+      - name: Upload wasm artifact
+        if: matrix.target == 'wasm32-unknown-unknown'
+        uses: actions/upload-artifact@v4
+        with:
+          name: rbtzip-wasm
+          path: target/wasm32-unknown-unknown/release/rbtcli.wasm
       - name: Duplicate test-name guard
+        if: matrix.target != 'wasm32-unknown-unknown'
         run: |
           cd build
           ctest -N | awk '{print $2}' | sort | uniq -d > dupes.txt || true
           if [ -s dupes.txt ]; then
-            echo "::error ::Duplicate CTest names detected:"; cat dupes.txt; exit 1; fi 
+            echo "::error ::Duplicate CTest names detected:"; cat dupes.txt; exit 1; fi
