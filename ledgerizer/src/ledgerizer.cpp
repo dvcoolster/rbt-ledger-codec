@@ -1,5 +1,6 @@
 #include "ledgerizer/ledgerizer.h"
 
+#include <limits>
 #include <stdexcept>
 
 namespace ledgerizer {
