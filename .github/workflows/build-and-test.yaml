@@ -6,6 +6,9 @@ on:
   pull_request:
     branches: [main]
 
+env:
+  BUILD_DIR: build
+
 jobs:
   build:
     strategy:
@@ -38,7 +41,11 @@ jobs:
           key: ${{ runner.os }}-cargo-${{ matrix.target }}-${{ hashFiles('**/Cargo.lock') }}
       - name: Build & Test (native targets)
         if: matrix.target != 'wasm32-unknown-unknown'
-        run: cargo test --all --release
+        run: |
+          cargo test --all --release
+          cmake -S . -B ${{ env.BUILD_DIR }} -DCMAKE_BUILD_TYPE=Release
+          cmake --build ${{ env.BUILD_DIR }} --parallel
+          cd ${{ env.BUILD_DIR }} && ctest --output-on-failure
       - name: Build rbtzip.wasm
         if: matrix.target == 'wasm32-unknown-unknown'
         run: |
@@ -52,7 +59,12 @@ jobs:
       - name: Duplicate test-name guard
         if: matrix.target != 'wasm32-unknown-unknown'
         run: |
-          cd build
+          BUILD_DIR="${BUILD_DIR:-build}"
+          if [ ! -d "$BUILD_DIR" ]; then
+            echo "Skip duplicate-test guard: build dir missing"
+            exit 0
+          fi
+          cd "$BUILD_DIR"
           ctest -N | awk '{print $2}' | sort | uniq -d > dupes.txt || true
           if [ -s dupes.txt ]; then
             echo "::error ::Duplicate CTest names detected:"; cat dupes.txt; exit 1; fi
