@@ -1,0 +1,22 @@
+# Build artifacts
+build/
+
+# CMake files
+CMakeFiles/
+CMakeCache.txt
+cmake_install.cmake
+Makefile
+
+# Compiled objects
+*.o
+*.a
+*.so
+*.dll
+*.dylib
+
+# Executables
+ledgerizer/ledgerizer-bin
+ledgerizer/tests/ledgerizer_tests
+
+# VSCode
+.vscode/ 
