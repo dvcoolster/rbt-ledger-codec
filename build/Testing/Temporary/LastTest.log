@@ -1,0 +1,19 @@
+Start testing: Jun 13 08:45 +07
+----------------------------------------------------------
+1/1 Testing: ledgerizer_basic
+1/1 Test: ledgerizer_basic
+Command: "/Users/dharamveerchouhan/Documents/Projects/rzip/build/ledgerizer/tests/ledgerizer_tests"
+Directory: /Users/dharamveerchouhan/Documents/Projects/rzip/build/ledgerizer/tests
+"ledgerizer_basic" start time: Jun 13 08:45 +07
+Output:
+----------------------------------------------------------
+All ledgerizer basic tests passed.
+<end of output>
+Test time =   0.30 sec
+----------------------------------------------------------
+Test Passed.
+"ledgerizer_basic" end time: Jun 13 08:45 +07
+"ledgerizer_basic" time elapsed: 00:00:00
+----------------------------------------------------------
+
+End testing: Jun 13 08:45 +07

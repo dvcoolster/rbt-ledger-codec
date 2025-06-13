@@ -1,0 +1,9 @@
+{
+	"InstallScripts" : 
+	[
+		"/Users/dharamveerchouhan/Documents/Projects/rzip/build/cmake_install.cmake",
+		"/Users/dharamveerchouhan/Documents/Projects/rzip/build/ledgerizer/cmake_install.cmake",
+		"/Users/dharamveerchouhan/Documents/Projects/rzip/build/ledgerizer/tests/cmake_install.cmake"
+	],
+	"Parallel" : false
+}

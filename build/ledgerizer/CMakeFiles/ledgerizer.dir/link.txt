@@ -1,0 +1,2 @@
+/usr/bin/ar qc libledgerizer.a CMakeFiles/ledgerizer.dir/src/ledgerizer.cpp.o
+/usr/bin/ranlib libledgerizer.a
