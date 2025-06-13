@@ -1,6 +1,6 @@
 # rbt-codec 🎛️
 
-[![build](https://github.com/dvcoolster/rbt-codec/actions/workflows/build-and-test.yaml/badge.svg)](https://github.com/dvcoolster/rbt-codec/actions/workflows/build-and-test.yaml)
+[![build](https://github.com/dvcoolster/rbt-ledger-codec/actions/workflows/build-and-test.yaml/badge.svg)](https://github.com/dvcoolster/rbt-ledger-codec/actions)
 
 Next-generation **RBT-powered compression suite** targeting 10–100 × reductions over ZIP/RAR and state-of-the-art video codecs.
 

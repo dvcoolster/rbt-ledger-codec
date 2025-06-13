@@ -1,4 +1,10 @@
-set(ANSX_LIB_PATH ${CMAKE_SOURCE_DIR}/target/release/libansx.a)
+# Set portable path for ansx static library
+set(CARGO_TARGET_DIR ${CMAKE_SOURCE_DIR}/target)
+set(ANSX_LIB_PATH
+    "${CARGO_TARGET_DIR}/release/${CMAKE_STATIC_LIBRARY_PREFIX}ansx${CMAKE_STATIC_LIBRARY_SUFFIX}"
+)
+
+message(STATUS "Using ansx static lib: ${ANSX_LIB_PATH}")
 
 # Build ansx staticlib using cargo
 add_custom_command(
