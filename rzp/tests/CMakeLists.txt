@@ -1,0 +1,30 @@
+# Determine path to built rzp executable at build time
+add_custom_target(dummy_target)
+
+set(RZP_PATH $<TARGET_FILE:rzp>)
+
+add_executable(rzp_cli_test cli_roundtrip.cpp)
+
+target_compile_definitions(rzp_cli_test PRIVATE RZP_BIN_PATH="\"${RZP_PATH}\"")
+
+target_link_libraries(rzp_cli_test PRIVATE ledgerizer)
+
+add_test(NAME rzp_cli_roundtrip COMMAND rzp_cli_test)
+
+file(WRITE ${CMAKE_CURRENT_BINARY_DIR}/png_1x1.hex "89504E470D0A1A0A0000000D49484452000000010000000108060000001F15C4890000000A49444154789C63600000020001E221BC330000000049454E44AE426082")
+
+# Convert hex to binary file using CMake -E
+add_custom_command(
+    OUTPUT ${CMAKE_CURRENT_BINARY_DIR}/cat.png
+    COMMAND ${CMAKE_COMMAND} -E echo "Converting hex to png"
+    COMMAND ${CMAKE_COMMAND} -E rm -f ${CMAKE_CURRENT_BINARY_DIR}/cat.png
+    COMMAND python3 ${CMAKE_CURRENT_LIST_DIR}/hex2bin.py ${CMAKE_CURRENT_BINARY_DIR}/png_1x1.hex ${CMAKE_CURRENT_BINARY_DIR}/cat.png
+    DEPENDS ${CMAKE_CURRENT_BINARY_DIR}/png_1x1.hex
+)
+
+add_custom_target(cat_png ALL DEPENDS ${CMAKE_CURRENT_BINARY_DIR}/cat.png)
+
+# Test encode/decode roundtrip
+add_test(NAME rzp_cli_roundtrip
+    COMMAND ${CMAKE_COMMAND} -E env "PATH=$<TARGET_FILE_DIR:rzp>:$ENV{PATH}" ${CMAKE_COMMAND} -P ${CMAKE_CURRENT_LIST_DIR}/run_test.cmake
+) 

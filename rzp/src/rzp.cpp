@@ -1,0 +1,96 @@
+#include "ledgerizer/ledgerizer.h"
+
+#include <fstream>
+#include <iostream>
+#include <iterator>
+#include <string>
+#include <vector>
+#include <cstdint>
+#include <cstring>
+
+namespace {
+
+constexpr const char MAGIC[4] = {'R', 'B', 'T', '1'};
+
+void write_file(const std::string& path, const std::vector<uint8_t>& data) {
+    std::ofstream ofs(path, std::ios::binary);
+    if (!ofs) {
+        throw std::runtime_error("Failed to write file: " + path);
+    }
+    ofs.write(reinterpret_cast<const char*>(data.data()), data.size());
+}
+
+std::vector<uint8_t> read_file(const std::string& path) {
+    std::ifstream ifs(path, std::ios::binary);
+    if (!ifs) {
+        throw std::runtime_error("Failed to open file: " + path);
+    }
+    return std::vector<uint8_t>(std::istreambuf_iterator<char>(ifs), {});
+}
+
+std::vector<uint8_t> encode_container(const std::vector<uint8_t>& raw) {
+    auto ledger = ledgerizer::encode(raw);
+    auto ser = ledgerizer::serialize(ledger);
+
+    uint32_t len = static_cast<uint32_t>(ser.size());
+    std::vector<uint8_t> out;
+    out.reserve(4 + sizeof(uint32_t) + len);
+    out.insert(out.end(), MAGIC, MAGIC + 4);
+    for (int i = 0; i < 4; ++i) {
+        out.push_back(static_cast<uint8_t>((len >> (i * 8)) & 0xFF));
+    }
+    out.insert(out.end(), ser.begin(), ser.end());
+    return out;
+}
+
+std::vector<uint8_t> decode_container(const std::vector<uint8_t>& container) {
+    if (container.size() < 8 || std::memcmp(container.data(), MAGIC, 4) != 0) {
+        throw std::runtime_error("Invalid container: bad magic");
+    }
+    uint32_t len = 0;
+    for (int i = 0; i < 4; ++i) {
+        len |= static_cast<uint32_t>(container[4 + i]) << (i * 8);
+    }
+    if (container.size() < 8 + len) {
+        throw std::runtime_error("Invalid container: length mismatch");
+    }
+    std::vector<uint8_t> ser(container.begin() + 8, container.begin() + 8 + len);
+    auto ledger = ledgerizer::deserialize(ser);
+    return ledgerizer::decode(ledger);
+}
+
+void print_usage(const char* exe) {
+    std::cerr << "Usage: " << exe << " encode <in.png> <out.rbt>\n";
+    std::cerr << "       " << exe << " decode <in.rbt> <out.png>\n";
+}
+
+} // namespace
+
+int main(int argc, char** argv) {
+    if (argc != 4) {
+        print_usage(argv[0]);
+        return 1;
+    }
+    std::string mode = argv[1];
+    std::string in = argv[2];
+    std::string out = argv[3];
+
+    try {
+        if (mode == "encode") {
+            auto raw = read_file(in);
+            auto cont = encode_container(raw);
+            write_file(out, cont);
+        } else if (mode == "decode") {
+            auto cont = read_file(in);
+            auto raw = decode_container(cont);
+            write_file(out, raw);
+        } else {
+            print_usage(argv[0]);
+            return 1;
+        }
+    } catch (const std::exception& e) {
+        std::cerr << "Error: " << e.what() << "\n";
+        return 1;
+    }
+    return 0;
+} 
