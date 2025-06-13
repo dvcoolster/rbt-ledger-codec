@@ -1,0 +1,11 @@
+[package]
+name = "rbtcli"
+version = "0.0.1"
+edition = "2024"
+license = "MIT"
+
+[dependencies]
+clap = { version = "4.5", features = ["derive"] }
+
+[dependencies.rbtcore]
+path = "../rbtcore" 
