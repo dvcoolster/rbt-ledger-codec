@@ -23,5 +23,5 @@ add_custom_target(cat_png ALL DEPENDS ${CMAKE_CURRENT_BINARY_DIR}/cat.png)
 
 # Test encode/decode roundtrip
 add_test(NAME rzp_cli_roundtrip_script
-    COMMAND ${CMAKE_COMMAND} -E env "PATH=$<TARGET_FILE_DIR:rzp>:$ENV{PATH}" ${CMAKE_COMMAND} -P ${CMAKE_CURRENT_LIST_DIR}/run_test.cmake
+    COMMAND ${CMAKE_COMMAND} -DRZP_EXE=$<TARGET_FILE:rzp> -DTEST_DIR=${CMAKE_CURRENT_BINARY_DIR} -P ${CMAKE_CURRENT_LIST_DIR}/run_test.cmake
 ) 

@@ -12,6 +12,7 @@ add_custom_command(
     COMMAND cargo build --package ansx --release
     WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}
     COMMENT "Building ansx static library via cargo"
+    BYPRODUCTS ${ANSX_LIB_PATH}
 )
 add_custom_target(ansx_lib ALL DEPENDS ${ANSX_LIB_PATH})
 
@@ -21,6 +22,16 @@ add_dependencies(rzp ansx_lib)
 
 target_include_directories(rzp PRIVATE ${CMAKE_SOURCE_DIR}/ansx/include)
 
-target_link_libraries(rzp PRIVATE ledgerizer ${ANSX_LIB_PATH})
+if (MSVC)
+    target_link_libraries(rzp PRIVATE
+        ledgerizer
+        ${ANSX_LIB_PATH}
+        ws2_32
+        userenv
+        ntdll
+    )
+else()
+    target_link_libraries(rzp PRIVATE ledgerizer ${ANSX_LIB_PATH})
+endif()
 
 install(TARGETS rzp RUNTIME DESTINATION bin) 
