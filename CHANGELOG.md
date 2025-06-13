@@ -16,6 +16,7 @@ All notable changes to this project will be documented in this file.
 - Fixed multi-config generator support with proper TARGET_FILE usage in tests
 - Fixed README badge URL to point to correct repository
 - Enhanced CI with proper Windows build configuration
+- Fixed Windows CI shell syntax by using PowerShell for duplicate test guard
 
 ## [v0.2.0-rc3] - CI Build Directory Fix
 ### Fixed
