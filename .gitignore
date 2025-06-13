@@ -19,4 +19,25 @@ ledgerizer/ledgerizer-bin
 ledgerizer/tests/ledgerizer_tests
 
 # VSCode
-.vscode/ 
+.vscode/
+
+# Rust
+/target/
+**/*.rs.bk
+
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+
+# Node
+node_modules/
+webapp/.next/
+
+# CUDA build artifacts
+*.ptx
+*.cubin
+
+# Lean
+lakefile.lean
+.olean 

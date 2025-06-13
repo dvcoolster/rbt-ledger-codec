@@ -1,0 +1,10 @@
+[workspace]
+members = [
+    "rbtcore",
+    "rbtcli",
+]
+
+[workspace.package]
+edition = "2024"
+name = "rbt-codec-workspace"
+version = "0.0.1" 
