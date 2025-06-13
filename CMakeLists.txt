@@ -9,8 +9,10 @@ set(CMAKE_CXX_EXTENSIONS OFF)
 option(BUILD_TESTS "Build unit tests" ON)
 
 add_subdirectory(ledgerizer)
+add_subdirectory(rzp)
 
 if(BUILD_TESTS)
     enable_testing()
     add_subdirectory(ledgerizer/tests)
+    add_subdirectory(rzp/tests)
 endif() 
