@@ -2,6 +2,13 @@
 
 All notable changes to this project will be documented in this file.
 
+## [v0.2.0-rc3] - CI Build Directory Fix
+### Fixed
+- Fixed CI build directory mismatch causing red builds
+- Added BUILD_DIR environment variable to workflow
+- Enhanced duplicate test guard with skip behavior for missing directories
+- Added proper CMake configure and build steps for native targets
+
 ## [v0.2.0-rc2] - WASM Build & Artifacts
 ### Added
 - WASM32 build target for browser usage (rbtcli.wasm)
