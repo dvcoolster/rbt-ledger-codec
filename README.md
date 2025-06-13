@@ -14,7 +14,7 @@ Next-generation **RBT-powered compression suite** targeting 10–100 × reductio
 4. **Lean-verified bounds** — proof that bit-length ≤ emergent-complexity (RBT Cor. 4.3).  
 5. **Deterministic builds** — Linux, macOS, Windows & WASM.
 
-Detailed roadmap in [`/docs`](docs/) and [`/specs`](specs/).
+Detailed roadmap in [`/docs`](docs/) and [`/specs`](specs/). See [compression results](docs/results.md) for benchmarks.
 
 ---
 
