@@ -2,6 +2,12 @@
 
 All notable changes to this project will be documented in this file.
 
+## [v0.2.0-rc2] - WASM Build & Artifacts
+### Added
+- WASM32 build target for browser usage (rbtcli.wasm)
+- GitHub Actions artifact upload for WASM binaries
+- Enhanced CI matrix with native vs WASM build separation
+
 ## [v0.2.0-rc1] - CI Green
 ### Fixed
 - Fixed CI duplicate-test guard and Rust E0133 lints
