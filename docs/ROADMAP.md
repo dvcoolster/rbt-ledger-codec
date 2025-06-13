@@ -24,8 +24,10 @@ These dates are **targets**, not guarantees.  Track detailed tasks in GitHub Iss
 
 ## Next Sprint (S₁)
 
-- [ ] FlowNet core: invertible coupling layers
-- [ ] Phase-tag conditioning
-- [ ] CIFAR-10 pre-training
-- [ ] .pt checkpoint via LFS
-- [ ] API flownet::encode(latent) 
+- [x] FlowNet scaffolding: Rust crate + Python training setup – Task A ✅
+- [x] CI hotfix: feature gates, green matrix restored ✅
+- [ ] FlowNet core: invertible coupling layers – Task B (in progress)
+- [ ] Phase-tag conditioning – Task C
+- [ ] CIFAR-10 pre-training – Task D
+- [ ] .pt checkpoint via LFS – Task E
+- [ ] CLI integration flag `--flownet` – Task F 
