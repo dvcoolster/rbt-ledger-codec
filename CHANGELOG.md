@@ -2,6 +2,16 @@
 
 All notable changes to this project will be documented in this file.
 
+## [v0.2.0] - Complete Multi-Language Codec
+### Added
+- Comprehensive documentation walkthrough with architecture details
+- Complete data flow documentation (PNG → RLE → ANS → .rbt → PNG)
+- Development workflow and contribution guidelines
+- Performance targets and current status overview
+
+### Fixed
+- Fixed ledgerizer build failure on GCC 13 (missing <limits> include)
+
 ## [v0.2.0-rc3] - CI Build Directory Fix
 ### Fixed
 - Fixed CI build directory mismatch causing red builds

@@ -18,4 +18,5 @@ These dates are **targets**, not guarantees.  Track detailed tasks in GitHub Iss
 - [x] CLI skeleton (encode/decode PNG round-trip) – v0.1.1
 - [x] ANS-X stub crate with C FFI integration – v0.2.0
 - [x] ANS stub done – CI green
-- [x] Task 11: CI artifact upload (WASM builds) – v0.2.0-rc2 ✅ 
+- [x] Task 11: CI artifact upload (WASM builds) – v0.2.0-rc2 ✅
+- [x] Task 12: Docs walkthrough – v0.2.0 
