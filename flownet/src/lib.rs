@@ -16,7 +16,7 @@ use alloc::{boxed::Box, vec::Vec};
 use std::boxed::Box;
 
 #[cfg(feature = "flownet")]
-use ndarray::Array3;
+use ndarray::{Array3, s};
 
 #[cfg(all(feature = "flownet", feature = "tract"))]
 use tract_onnx::prelude::*;
@@ -36,6 +36,29 @@ pub enum FlowNetError {
 /// Result type for FlowNet operations
 pub type Result<T> = core::result::Result<T, FlowNetError>;
 
+/// Coupling layer types
+#[cfg(feature = "flownet")]
+#[derive(Debug, Clone, Copy)]
+pub enum CouplingType {
+    /// Additive coupling: y = x + t(x_masked)
+    Additive,
+    /// Affine coupling: y = x * exp(s(x_masked)) + t(x_masked)
+    Affine,
+}
+
+/// A single coupling block in the normalizing flow
+#[cfg(feature = "flownet")]
+pub struct CouplingBlock {
+    /// Type of coupling transformation
+    coupling_type: CouplingType,
+    /// Mask for splitting channels (true = transform, false = identity)
+    mask: Vec<bool>,
+    /// Network depth for transformation functions
+    depth: usize,
+    /// Cached transformation parameters
+    cached_params: Option<(Array3<f32>, Option<Array3<f32>>)>, // (translation, scale)
+}
+
 /// FlowNet model for invertible transformations
 #[cfg(feature = "flownet")]
 pub struct FlowNet {
@@ -45,19 +68,176 @@ pub struct FlowNet {
     depth: usize,
     /// Whether a model is loaded
     loaded: bool,
+    /// Coupling blocks for each level
+    coupling_blocks: Vec<Vec<CouplingBlock>>,
     /// Tract model (only with tract feature)
     #[cfg(feature = "tract")]
     model: Option<SimplePlan<TypedFact, Box<dyn TypedOp>, Graph<TypedFact, Box<dyn TypedOp>>>>,
 }
 
 #[cfg(feature = "flownet")]
+impl CouplingBlock {
+    /// Create a new coupling block
+    pub fn new(coupling_type: CouplingType, channels: usize, depth: usize) -> Self {
+        // Create alternating mask pattern
+        let mask = (0..channels).map(|i| i % 2 == 0).collect();
+        
+        Self {
+            coupling_type,
+            mask,
+            depth,
+            cached_params: None,
+        }
+    }
+    
+    /// Forward transformation through coupling block
+    pub fn forward(&self, input: &Array3<f32>) -> Result<(Array3<f32>, f32)> {
+        let (_c, _h, _w) = input.dim();
+        let mut output = input.clone();
+        let mut log_det = 0.0f32;
+        
+        // Split channels according to mask
+        let (x_id, _x_transform) = self.split_channels(input);
+        
+        // Compute transformation parameters from identity channels
+        let (translation, scale) = self.compute_transform_params(&x_id)?;
+        
+        // Apply coupling transformation to transform channels
+        for (ch_idx, &should_transform) in self.mask.iter().enumerate() {
+            if should_transform {
+                let mut ch_slice = output.slice_mut(s![ch_idx, .., ..]);
+                match self.coupling_type {
+                    CouplingType::Additive => {
+                        // y = x + t(x_masked)
+                        let t_slice = translation.slice(s![ch_idx, .., ..]);
+                        ch_slice += &t_slice;
+                        // Additive coupling has zero log-determinant
+                    }
+                    CouplingType::Affine => {
+                        // y = x * exp(s(x_masked)) + t(x_masked)
+                        if let Some(ref scale_arr) = scale {
+                            let s_slice = scale_arr.slice(s![ch_idx, .., ..]);
+                            let t_slice = translation.slice(s![ch_idx, .., ..]);
+                            
+                            // Apply affine transformation
+                            ch_slice.zip_mut_with(&s_slice, |y, &s| *y *= s.exp());
+                            ch_slice += &t_slice;
+                            
+                            // Accumulate log-determinant
+                            log_det += s_slice.sum();
+                        }
+                    }
+                }
+            }
+        }
+        
+        Ok((output, log_det))
+    }
+    
+    /// Inverse transformation through coupling block
+    pub fn inverse(&self, input: &Array3<f32>) -> Result<Array3<f32>> {
+        let mut output = input.clone();
+        
+        // Split channels according to mask
+        let (x_id, _) = self.split_channels(input);
+        
+        // Compute transformation parameters from identity channels
+        let (translation, scale) = self.compute_transform_params(&x_id)?;
+        
+        // Apply inverse coupling transformation
+        for (ch_idx, &should_transform) in self.mask.iter().enumerate() {
+            if should_transform {
+                let mut ch_slice = output.slice_mut(s![ch_idx, .., ..]);
+                match self.coupling_type {
+                    CouplingType::Additive => {
+                        // x = y - t(x_masked)
+                        let t_slice = translation.slice(s![ch_idx, .., ..]);
+                        ch_slice -= &t_slice;
+                    }
+                    CouplingType::Affine => {
+                        // x = (y - t(x_masked)) / exp(s(x_masked))
+                        if let Some(ref scale_arr) = scale {
+                            let s_slice = scale_arr.slice(s![ch_idx, .., ..]);
+                            let t_slice = translation.slice(s![ch_idx, .., ..]);
+                            
+                            ch_slice -= &t_slice;
+                            ch_slice.zip_mut_with(&s_slice, |x, &s| *x /= s.exp());
+                        }
+                    }
+                }
+            }
+        }
+        
+        Ok(output)
+    }
+    
+    /// Split channels according to mask
+    fn split_channels(&self, input: &Array3<f32>) -> (Array3<f32>, Array3<f32>) {
+        let (c, h, w) = input.dim();
+        let mut x_id = Array3::<f32>::zeros((c, h, w));
+        let mut x_transform = Array3::<f32>::zeros((c, h, w));
+        
+        for (ch_idx, &is_transform) in self.mask.iter().enumerate() {
+            if is_transform {
+                x_transform.slice_mut(s![ch_idx, .., ..])
+                    .assign(&input.slice(s![ch_idx, .., ..]));
+            } else {
+                x_id.slice_mut(s![ch_idx, .., ..])
+                    .assign(&input.slice(s![ch_idx, .., ..]));
+            }
+        }
+        
+        (x_id, x_transform)
+    }
+    
+    /// Compute transformation parameters (stub implementation)
+    fn compute_transform_params(&self, x_id: &Array3<f32>) -> Result<(Array3<f32>, Option<Array3<f32>>)> {
+        let (c, h, w) = x_id.dim();
+        
+        // Stub: simple linear transformation based on input statistics
+        let mean = x_id.mean().unwrap_or(0.0);
+        let translation = Array3::<f32>::from_elem((c, h, w), mean * 0.1);
+        
+        let scale = match self.coupling_type {
+            CouplingType::Additive => None,
+            CouplingType::Affine => {
+                let std = ((x_id - mean).mapv(|x| x * x).mean().unwrap_or(1.0)).sqrt();
+                Some(Array3::<f32>::from_elem((c, h, w), std * 0.01))
+            }
+        };
+        
+        Ok((translation, scale))
+    }
+}
+
+#[cfg(feature = "flownet")]
 impl FlowNet {
     /// Create a new FlowNet instance
     pub fn new(levels: usize, depth: usize) -> Self {
+        // Initialize coupling blocks for each level
+        let mut coupling_blocks = Vec::new();
+        for _level in 0..levels {
+            let mut level_blocks = Vec::new();
+            for block_idx in 0..depth {
+                // Alternate between additive and affine coupling
+                let coupling_type = if block_idx % 2 == 0 {
+                    CouplingType::Additive
+                } else {
+                    CouplingType::Affine
+                };
+                
+                // Default to 3 channels (RGB)
+                let block = CouplingBlock::new(coupling_type, 3, depth);
+                level_blocks.push(block);
+            }
+            coupling_blocks.push(level_blocks);
+        }
+        
         Self {
             levels,
             depth,
             loaded: false,
+            coupling_blocks,
             #[cfg(feature = "tract")]
             model: None,
         }
@@ -75,15 +255,25 @@ impl FlowNet {
     /// * `phase_tag` - 8-bit phase conditioning tag
     ///
     /// # Returns
-    /// Encoded latent representation
-    pub fn encode(&self, input: &Array3<f32>, _phase_tag: u8) -> Result<Array3<f32>> {
+    /// Encoded latent representation and log-determinant
+    pub fn encode(&self, input: &Array3<f32>, _phase_tag: u8) -> Result<(Array3<f32>, f32)> {
         if !self.loaded {
             return Err(FlowNetError::ModelNotLoaded);
         }
         
-        // TODO: Implement forward flow transformation
-        // For now, return identity
-        Ok(input.clone())
+        let mut z = input.clone();
+        let mut total_log_det = 0.0f32;
+        
+        // Apply coupling blocks level by level
+        for level_blocks in &self.coupling_blocks {
+            for block in level_blocks {
+                let (z_new, log_det) = block.forward(&z)?;
+                z = z_new;
+                total_log_det += log_det;
+            }
+        }
+        
+        Ok((z, total_log_det))
     }
 
     /// Decode latent representation through inverse flow
@@ -99,9 +289,16 @@ impl FlowNet {
             return Err(FlowNetError::ModelNotLoaded);
         }
         
-        // TODO: Implement inverse flow transformation
-        // For now, return identity
-        Ok(latent.clone())
+        let mut x = latent.clone();
+        
+        // Apply coupling blocks in reverse order
+        for level_blocks in self.coupling_blocks.iter().rev() {
+            for block in level_blocks.iter().rev() {
+                x = block.inverse(&x)?;
+            }
+        }
+        
+        Ok(x)
     }
 
     /// Load model weights from bytes
@@ -134,6 +331,14 @@ impl FlowNet {
     
     pub fn default() -> Self {
         Self::new(4, 4)
+    }
+    
+    pub fn encode(&self, _input: &[f32], _phase_tag: u8) -> core::result::Result<(Vec<f32>, f32), FlowNetError> {
+        Err(FlowNetError::ModelNotLoaded)
+    }
+    
+    pub fn decode(&self, _latent: &[f32], _phase_tag: u8) -> core::result::Result<Vec<f32>, FlowNetError> {
+        Err(FlowNetError::ModelNotLoaded)
     }
 }
 
@@ -202,20 +407,48 @@ mod tests {
 
     #[test]
     #[cfg(feature = "flownet")]
-    fn test_encode_decode_identity() {
+    fn test_encode_decode_roundtrip() {
         use ndarray::Array3;
+        use approx::assert_relative_eq;
         
         let mut flow = FlowNet::default();
         // Simulate loading weights
         flow.loaded = true;
         
-        let input = Array3::<f32>::zeros((3, 32, 32));
+        let input = Array3::<f32>::from_elem((3, 8, 8), 0.5);
         let phase_tag = 0;
         
-        let encoded = flow.encode(&input, phase_tag).unwrap();
+        let (encoded, log_det) = flow.encode(&input, phase_tag).unwrap();
         let decoded = flow.decode(&encoded, phase_tag).unwrap();
         
-        // For now, should be identity
+        // Should recover input within tolerance
         assert_eq!(input.shape(), decoded.shape());
+        
+        // Check that roundtrip preserves data (within numerical precision)
+        for (_i, (&orig, &rec)) in input.iter().zip(decoded.iter()).enumerate() {
+            assert_relative_eq!(orig, rec, epsilon = 1e-5, 
+                               max_relative = 1e-4);
+        }
+        
+        // Log determinant should be finite
+        assert!(log_det.is_finite());
+    }
+    
+    #[test]
+    #[cfg(feature = "flownet")]
+    fn test_coupling_block_invertibility() {
+        use ndarray::Array3;
+        use approx::assert_relative_eq;
+        
+        let block = CouplingBlock::new(CouplingType::Additive, 3, 4);
+        let input = Array3::<f32>::from_elem((3, 4, 4), 1.0);
+        
+        let (encoded, _log_det) = block.forward(&input).unwrap();
+        let decoded = block.inverse(&encoded).unwrap();
+        
+        // Should recover input exactly for additive coupling
+        for (_i, (&orig, &rec)) in input.iter().zip(decoded.iter()).enumerate() {
+            assert_relative_eq!(orig, rec, epsilon = 1e-6);
+        }
     }
 } 
