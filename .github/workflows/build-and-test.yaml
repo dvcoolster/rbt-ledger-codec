@@ -34,4 +34,10 @@ jobs:
             target
           key: ${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.lock') }}
       - name: Build & Test
-        run: cargo test --all --release 
+        run: cargo test --all --release
+      - name: Duplicate test-name guard
+        run: |
+          cd build
+          ctest -N | awk '{print $2}' | sort | uniq -d > dupes.txt || true
+          if [ -s dupes.txt ]; then
+            echo "::error ::Duplicate CTest names detected:"; cat dupes.txt; exit 1; fi 

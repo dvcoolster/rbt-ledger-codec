@@ -1,4 +1,5 @@
 #include "ledgerizer/ledgerizer.h"
+#include "ansx.h"
 
 #include <fstream>
 #include <iostream>
@@ -32,14 +33,19 @@ std::vector<uint8_t> encode_container(const std::vector<uint8_t>& raw) {
     auto ledger = ledgerizer::encode(raw);
     auto ser = ledgerizer::serialize(ledger);
 
-    uint32_t len = static_cast<uint32_t>(ser.size());
+    uint32_t ansx_len = 0;
+    uint8_t* ansx_ptr = ansx_encode(ser.data(), static_cast<uint32_t>(ser.size()), &ansx_len);
+    std::vector<uint8_t> ansx_bytes(ansx_ptr, ansx_ptr + ansx_len);
+    ansx_free(ansx_ptr, ansx_len);
+
+    uint32_t len = static_cast<uint32_t>(ansx_bytes.size());
     std::vector<uint8_t> out;
     out.reserve(4 + sizeof(uint32_t) + len);
     out.insert(out.end(), MAGIC, MAGIC + 4);
     for (int i = 0; i < 4; ++i) {
         out.push_back(static_cast<uint8_t>((len >> (i * 8)) & 0xFF));
     }
-    out.insert(out.end(), ser.begin(), ser.end());
+    out.insert(out.end(), ansx_bytes.begin(), ansx_bytes.end());
     return out;
 }
 
@@ -54,7 +60,11 @@ std::vector<uint8_t> decode_container(const std::vector<uint8_t>& container) {
     if (container.size() < 8 + len) {
         throw std::runtime_error("Invalid container: length mismatch");
     }
-    std::vector<uint8_t> ser(container.begin() + 8, container.begin() + 8 + len);
+    std::vector<uint8_t> ansx_bytes(container.begin() + 8, container.begin() + 8 + len);
+    uint32_t ser_len = 0;
+    uint8_t* ser_ptr = ansx_decode(ansx_bytes.data(), len, &ser_len);
+    std::vector<uint8_t> ser(ser_ptr, ser_ptr + ser_len);
+    ansx_free(ser_ptr, ser_len);
     auto ledger = ledgerizer::deserialize(ser);
     return ledgerizer::decode(ledger);
 }

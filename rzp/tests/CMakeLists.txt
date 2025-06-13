@@ -1,5 +1,4 @@
-# Determine path to built rzp executable at build time
-add_custom_target(dummy_target)
+# Tests for rzp CLI
 
 set(RZP_PATH $<TARGET_FILE:rzp>)
 
@@ -25,6 +24,6 @@ add_custom_command(
 add_custom_target(cat_png ALL DEPENDS ${CMAKE_CURRENT_BINARY_DIR}/cat.png)
 
 # Test encode/decode roundtrip
-add_test(NAME rzp_cli_roundtrip
+add_test(NAME rzp_cli_roundtrip_script
     COMMAND ${CMAKE_COMMAND} -E env "PATH=$<TARGET_FILE_DIR:rzp>:$ENV{PATH}" ${CMAKE_COMMAND} -P ${CMAKE_CURRENT_LIST_DIR}/run_test.cmake
 ) 

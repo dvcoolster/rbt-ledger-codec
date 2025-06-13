@@ -1,0 +1,12 @@
+[package]
+name = "ansx"
+version = "0.0.1"
+edition = "2024"
+license = "MIT"
+
+[lib]
+name = "ansx"
+crate-type = ["staticlib", "cdylib", "rlib"]
+
+[dependencies]
+libc = "0.2" 
