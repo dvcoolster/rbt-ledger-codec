@@ -12,6 +12,8 @@ All notable changes to this project will be documented in this file.
 ### Fixed
 - Fixed ledgerizer build failure on GCC 13 (missing <limits> include)
 - Fixed Windows MSVC build with portable static library paths
+- Fixed Windows linking by adding required system libraries (ws2_32, userenv, ntdll)
+- Fixed multi-config generator support with proper TARGET_FILE usage in tests
 - Fixed README badge URL to point to correct repository
 - Enhanced CI with proper Windows build configuration
 
