@@ -86,10 +86,18 @@ jobs:
             exit 0
           }
           Set-Location $BUILD_DIR
-          $tests = ctest -N | ForEach-Object { ($_ -split '\s+')[1] } | Where-Object { $_ -ne $null -and $_ -ne "" }
-          $duplicates = $tests | Group-Object | Where-Object { $_.Count -gt 1 }
+          # Run ctest -N and filter for actual test lines
+          $output = ctest -N 2>&1
+          $testLines = $output | Where-Object { $_ -match '^\s*Test\s+#\d+:\s+(.+)$' }
+          $testNames = $testLines | ForEach-Object { 
+            if ($_ -match '^\s*Test\s+#\d+:\s+(.+)$') { $matches[1].Trim() }
+          }
+          # Find duplicates
+          $grouped = $testNames | Group-Object
+          $duplicates = $grouped | Where-Object { $_.Count -gt 1 }
           if ($duplicates) {
             Write-Host "::error ::Duplicate CTest names detected:"
-            $duplicates | ForEach-Object { Write-Host $_.Name }
+            $duplicates | ForEach-Object { Write-Host "  - $($_.Name) (appears $($_.Count) times)" }
             exit 1
           }
+          Write-Host "No duplicate test names found"
