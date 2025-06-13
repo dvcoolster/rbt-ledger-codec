@@ -2,12 +2,17 @@
 
 All notable changes to this project will be documented in this file.
 
-## [v0.2.0] - Complete Multi-Language Codec
+## [v0.2.0] (2025-06-14) - Complete Multi-Language Codec
 ### Added
+- Cross-platform CLI encode/decode demo with rzp tool
+- Static ANS stub linked with C FFI integration
+- CI matrix green on Linux/macOS/Windows with artifact publishing
+- Added demo_walkthrough.md and results stub documentation
 - Comprehensive documentation walkthrough with architecture details
 - Complete data flow documentation (PNG → RLE → ANS → .rbt → PNG)
 - Development workflow and contribution guidelines
 - Performance targets and current status overview
+- Demo artifact upload (PNG + RBT files) from Linux CI
 
 ### Fixed
 - Fixed ledgerizer build failure on GCC 13 (missing <limits> include)

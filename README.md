@@ -24,6 +24,10 @@ Detailed roadmap in [`/docs`](docs/) and [`/specs`](specs/). See [compression re
 cargo test --workspace --release
 ```
 
+### Quick demo
+
+See [demo walkthrough](docs/demo_walkthrough.md) for a complete encode/decode demonstration with the rzp CLI tool.
+
 Other components (CUDA kernels, web app, Lean proofs) have their own README files.
 
 ---

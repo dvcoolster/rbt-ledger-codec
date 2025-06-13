@@ -56,6 +56,14 @@ jobs:
         with:
           name: rbtzip-wasm
           path: target/wasm32-unknown-unknown/release/rbtcli.wasm
+      - name: Upload demo artifact
+        if: matrix.target == 'x86_64-unknown-linux-gnu'
+        uses: actions/upload-artifact@v4
+        with:
+          name: demo-rbt
+          path: |
+            build/rzp/tests/cat.png
+            build/rzp/tests/test.rbt
       - name: Duplicate test-name guard (Unix)
         if: matrix.target != 'wasm32-unknown-unknown' && runner.os != 'Windows'
         run: |
