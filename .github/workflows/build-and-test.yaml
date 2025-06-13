@@ -56,8 +56,8 @@ jobs:
         with:
           name: rbtzip-wasm
           path: target/wasm32-unknown-unknown/release/rbtcli.wasm
-      - name: Duplicate test-name guard
-        if: matrix.target != 'wasm32-unknown-unknown'
+      - name: Duplicate test-name guard (Unix)
+        if: matrix.target != 'wasm32-unknown-unknown' && runner.os != 'Windows'
         run: |
           BUILD_DIR="${BUILD_DIR:-build}"
           if [ ! -d "$BUILD_DIR" ]; then
@@ -68,3 +68,20 @@ jobs:
           ctest -N | awk '{print $2}' | sort | uniq -d > dupes.txt || true
           if [ -s dupes.txt ]; then
             echo "::error ::Duplicate CTest names detected:"; cat dupes.txt; exit 1; fi
+      - name: Duplicate test-name guard (Windows)
+        if: matrix.target != 'wasm32-unknown-unknown' && runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          $BUILD_DIR = if ($env:BUILD_DIR) { $env:BUILD_DIR } else { "build" }
+          if (-not (Test-Path $BUILD_DIR)) {
+            Write-Host "Skip duplicate-test guard: build dir missing"
+            exit 0
+          }
+          Set-Location $BUILD_DIR
+          $tests = ctest -N | ForEach-Object { ($_ -split '\s+')[1] } | Where-Object { $_ -ne $null -and $_ -ne "" }
+          $duplicates = $tests | Group-Object | Where-Object { $_.Count -gt 1 }
+          if ($duplicates) {
+            Write-Host "::error ::Duplicate CTest names detected:"
+            $duplicates | ForEach-Object { Write-Host $_.Name }
+            exit 1
+          }
