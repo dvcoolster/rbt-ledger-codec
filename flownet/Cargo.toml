@@ -1,0 +1,27 @@
+[package]
+name = "flownet"
+version = "0.1.0"
+edition = "2021"
+authors = ["RBT Contributors"]
+license = "MIT OR Apache-2.0"
+description = "Invertible neural flow for RBT compression"
+
+[dependencies]
+# Core dependencies for no-std
+ndarray = { version = "0.15", default-features = false }
+libm = "0.2"  # For no-std math functions
+
+# Optional tract for neural network inference
+tract-onnx = { version = "0.21", optional = true }
+
+[features]
+default = []
+tract = ["tract-onnx"]
+std = ["ndarray/std"]
+
+[dev-dependencies]
+approx = "0.5"
+
+[lib]
+name = "flownet"
+crate-type = ["staticlib", "cdylib", "rlib"] 

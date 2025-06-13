@@ -4,6 +4,7 @@ members = [
     "rbtcore",
     "rbtcli",
     "ansx",
+    "flownet",
 ]
 
 [workspace.package]
