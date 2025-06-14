@@ -583,4 +583,166 @@ mod tests {
         assert_eq!(decoded_small.shape(), input_small.shape());
         assert_eq!(decoded_large.shape(), input_large.shape());
     }
+    
+    #[test]
+    #[cfg(feature = "flownet")]
+    fn test_log_determinant_consistency() {
+        use ndarray::Array3;
+        use approx::assert_relative_eq;
+        
+        // Test that log-determinant is computed consistently
+        let block = CouplingBlock::new(CouplingType::Affine, 3, 4);
+        let input = Array3::<f32>::from_elem((3, 4, 4), 0.8);
+        let phase_tag = 64;
+        
+        // Forward pass should give consistent log-det
+        let (encoded_1, log_det_1) = block.forward(&input, phase_tag).unwrap();
+        let (encoded_2, log_det_2) = block.forward(&input, phase_tag).unwrap();
+        
+        // Same input should give same log-det
+        assert_relative_eq!(log_det_1, log_det_2, epsilon = 1e-10);
+        
+        // Same input should give same output
+        for (&a, &b) in encoded_1.iter().zip(encoded_2.iter()) {
+            assert_relative_eq!(a, b, epsilon = 1e-10);
+        }
+    }
+    
+    #[test]
+    #[cfg(feature = "flownet")]
+    fn test_additive_coupling_zero_logdet() {
+        use ndarray::Array3;
+        
+        // Additive coupling should have zero log-determinant
+        let block = CouplingBlock::new(CouplingType::Additive, 3, 4);
+        let input = Array3::<f32>::from_elem((3, 4, 4), 1.5);
+        let phase_tag = 128;
+        
+        let (_encoded, log_det) = block.forward(&input, phase_tag).unwrap();
+        
+        // Additive coupling has zero log-determinant
+        assert_eq!(log_det, 0.0);
+    }
+    
+    #[test]
+    #[cfg(feature = "flownet")]
+    fn test_affine_coupling_nonzero_logdet() {
+        use ndarray::Array3;
+        
+        // Affine coupling should have non-zero log-determinant
+        let block = CouplingBlock::new(CouplingType::Affine, 3, 4);
+        let input = Array3::<f32>::from_elem((3, 4, 4), 1.2);
+        let phase_tag = 200;
+        
+        let (_encoded, log_det) = block.forward(&input, phase_tag).unwrap();
+        
+        // Affine coupling should have non-zero log-determinant
+        assert!(log_det.abs() > 1e-6, "Affine coupling should have non-zero log-det, got: {}", log_det);
+        assert!(log_det.is_finite(), "Log-determinant should be finite");
+    }
+    
+    #[test]
+    #[cfg(feature = "flownet")]
+    fn test_flownet_invertibility_precision() {
+        use ndarray::Array3;
+        use approx::assert_relative_eq;
+        
+        // Test FlowNet invertibility with very tight tolerance
+        let mut flow = FlowNet::new(2, 2); // Smaller for faster test
+        flow.loaded = true;
+        
+        // Test with various inputs
+        let test_cases = vec![
+            Array3::<f32>::zeros((3, 4, 4)),
+            Array3::<f32>::ones((3, 4, 4)),
+            Array3::<f32>::from_elem((3, 4, 4), 0.5),
+            Array3::<f32>::from_elem((3, 4, 4), -0.3),
+        ];
+        
+        for (i, input) in test_cases.iter().enumerate() {
+            let phase_tag = (i * 50) as u8; // Different phase tag for each test
+            
+            let (encoded, log_det) = flow.encode(input, phase_tag).unwrap();
+            let decoded = flow.decode(&encoded, phase_tag).unwrap();
+            
+            // Very tight tolerance for invertibility
+            for (_j, (&orig, &rec)) in input.iter().zip(decoded.iter()).enumerate() {
+                assert_relative_eq!(orig, rec, epsilon = 1e-6, max_relative = 1e-5);
+            }
+            
+            // Log-determinant should be finite
+            assert!(log_det.is_finite(), "Log-determinant should be finite for test case {}", i);
+        }
+    }
+    
+    #[test]
+    #[cfg(feature = "flownet")]
+    fn test_flownet_log_determinant_accumulation() {
+        use ndarray::Array3;
+        
+        // Test that FlowNet correctly accumulates log-determinants across blocks
+        let mut flow = FlowNet::new(2, 3); // 2 levels, 3 blocks each
+        flow.loaded = true;
+        
+        let input = Array3::<f32>::from_elem((3, 4, 4), 0.7);
+        let phase_tag = 42;
+        
+        let (encoded, total_log_det) = flow.encode(&input, phase_tag).unwrap();
+        
+        // Manually compute log-det by applying each block
+        let mut manual_z = input.clone();
+        let mut manual_log_det = 0.0f32;
+        
+        for level_blocks in &flow.coupling_blocks {
+            for block in level_blocks {
+                let (z_new, log_det) = block.forward(&manual_z, phase_tag).unwrap();
+                manual_z = z_new;
+                manual_log_det += log_det;
+            }
+        }
+        
+        // FlowNet should give same result as manual computation
+        assert_eq!(total_log_det, manual_log_det);
+        
+        // Encoded results should match
+        for (&a, &b) in encoded.iter().zip(manual_z.iter()) {
+            assert_eq!(a, b);
+        }
+    }
+    
+    #[test]
+    #[cfg(feature = "flownet")]
+    fn test_numerical_stability_extreme_values() {
+        use ndarray::Array3;
+        use approx::assert_relative_eq;
+        
+        // Test numerical stability with extreme input values
+        let block = CouplingBlock::new(CouplingType::Affine, 3, 2);
+        
+        let extreme_cases = vec![
+            Array3::<f32>::from_elem((3, 2, 2), 10.0),   // Large positive
+            Array3::<f32>::from_elem((3, 2, 2), -10.0),  // Large negative
+            Array3::<f32>::from_elem((3, 2, 2), 1e-6),   // Very small positive
+            Array3::<f32>::from_elem((3, 2, 2), -1e-6),  // Very small negative
+        ];
+        
+        for (i, input) in extreme_cases.iter().enumerate() {
+            let phase_tag = (i * 60) as u8;
+            
+            let (encoded, log_det) = block.forward(input, phase_tag).unwrap();
+            let decoded = block.inverse(&encoded, phase_tag).unwrap();
+            
+            // Should still be invertible even with extreme values
+            for (&orig, &rec) in input.iter().zip(decoded.iter()) {
+                assert_relative_eq!(orig, rec, epsilon = 1e-5, max_relative = 1e-4);
+            }
+            
+            // Log-determinant should be finite
+            assert!(log_det.is_finite(), "Log-det should be finite for extreme case {}", i);
+            
+            // Encoded values should be finite
+            assert!(encoded.iter().all(|&x| x.is_finite()), 
+                   "All encoded values should be finite for extreme case {}", i);
+        }
+    }
 } 
