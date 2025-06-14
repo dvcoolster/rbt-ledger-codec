@@ -10,6 +10,10 @@ All notable changes to this project will be documented in this file.
 - FiLM (Feature-wise Linear Modulation) phase-tag conditioning
 - 256-entry lookup table for 8-bit phase tag conditioning
 - Tests verifying different phase tags produce different outputs
+- ANS-X comprehensive design document with 16-bit symbol space specification
+- RBT parity-based block skipping optimization design
+- x86_64 AVX2 SIMD implementation plan with scalar fallback
+- ANX1 chunk format specification for RBT2 container integration
 
 ## [v0.2.0] (2025-06-14) - Complete Multi-Language Codec
 ### Added

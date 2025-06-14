@@ -28,6 +28,7 @@ These dates are **targets**, not guarantees.  Track detailed tasks in GitHub Iss
 - [x] CI hotfix: feature gates, green matrix restored ✅
 - [x] FlowNet core: invertible coupling layers – Task B ✅
 - [x] Phase-tag conditioning – Task C ✅
+- [x] ANS design doc – comprehensive architecture specification ✅
 - [ ] CIFAR-10 pre-training – Task D
 - [ ] .pt checkpoint via LFS – Task E
 - [ ] CLI integration flag `--flownet` – Task F 
