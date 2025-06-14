@@ -2,6 +2,12 @@
 
 All notable changes to this project will be documented in this file.
 
+## [Unreleased]
+### Added
+- FlowNet coupling blocks with additive/affine transformations
+- Invertible flow architecture with 4 levels, depth 4
+- Comprehensive roundtrip tests for coupling block invertibility
+
 ## [v0.2.0] (2025-06-14) - Complete Multi-Language Codec
 ### Added
 - Cross-platform CLI encode/decode demo with rzp tool
