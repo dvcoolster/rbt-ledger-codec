@@ -46,6 +46,16 @@ pub enum CouplingType {
     Affine,
 }
 
+/// FiLM (Feature-wise Linear Modulation) parameters
+#[cfg(feature = "flownet")]
+#[derive(Debug, Clone)]
+pub struct FilmParams {
+    /// Gamma (scale) parameters for FiLM conditioning
+    pub gamma: Array3<f32>,
+    /// Beta (shift) parameters for FiLM conditioning  
+    pub beta: Array3<f32>,
+}
+
 /// A single coupling block in the normalizing flow
 #[cfg(feature = "flownet")]
 pub struct CouplingBlock {
@@ -57,6 +67,8 @@ pub struct CouplingBlock {
     depth: usize,
     /// Cached transformation parameters
     cached_params: Option<(Array3<f32>, Option<Array3<f32>>)>, // (translation, scale)
+    /// FiLM conditioning lookup table (256 entries for 8-bit phase tags)
+    film_table: Vec<FilmParams>,
 }
 
 /// FlowNet model for invertible transformations
@@ -82,16 +94,33 @@ impl CouplingBlock {
         // Create alternating mask pattern
         let mask = (0..channels).map(|i| i % 2 == 0).collect();
         
+        // Initialize FiLM table with 256 entries for 8-bit phase tags
+        let mut film_table = Vec::with_capacity(256);
+        for phase_tag in 0..256 {
+            // Generate phase-dependent FiLM parameters
+            let phase_norm = phase_tag as f32 / 255.0; // Normalize to [0, 1]
+            
+            // Linear + sinusoidal modulation to ensure all phase tags are different
+            let gamma_val = 1.0 + 0.3 * phase_norm + 0.2 * (phase_norm * 2.0 * core::f32::consts::PI).sin();
+            let beta_val = 0.1 * phase_norm + 0.1 * (phase_norm * 4.0 * core::f32::consts::PI).cos();
+            
+            let gamma = Array3::<f32>::from_elem((channels, 1, 1), gamma_val);
+            let beta = Array3::<f32>::from_elem((channels, 1, 1), beta_val);
+            
+            film_table.push(FilmParams { gamma, beta });
+        }
+        
         Self {
             coupling_type,
             mask,
             depth,
             cached_params: None,
+            film_table,
         }
     }
     
     /// Forward transformation through coupling block
-    pub fn forward(&self, input: &Array3<f32>) -> Result<(Array3<f32>, f32)> {
+    pub fn forward(&self, input: &Array3<f32>, phase_tag: u8) -> Result<(Array3<f32>, f32)> {
         let (_c, _h, _w) = input.dim();
         let mut output = input.clone();
         let mut log_det = 0.0f32;
@@ -99,8 +128,8 @@ impl CouplingBlock {
         // Split channels according to mask
         let (x_id, _x_transform) = self.split_channels(input);
         
-        // Compute transformation parameters from identity channels
-        let (translation, scale) = self.compute_transform_params(&x_id)?;
+        // Compute transformation parameters from identity channels with FiLM conditioning
+        let (translation, scale) = self.compute_transform_params(&x_id, phase_tag)?;
         
         // Apply coupling transformation to transform channels
         for (ch_idx, &should_transform) in self.mask.iter().enumerate() {
@@ -135,14 +164,14 @@ impl CouplingBlock {
     }
     
     /// Inverse transformation through coupling block
-    pub fn inverse(&self, input: &Array3<f32>) -> Result<Array3<f32>> {
+    pub fn inverse(&self, input: &Array3<f32>, phase_tag: u8) -> Result<Array3<f32>> {
         let mut output = input.clone();
         
         // Split channels according to mask
         let (x_id, _) = self.split_channels(input);
         
-        // Compute transformation parameters from identity channels
-        let (translation, scale) = self.compute_transform_params(&x_id)?;
+        // Compute transformation parameters from identity channels with FiLM conditioning
+        let (translation, scale) = self.compute_transform_params(&x_id, phase_tag)?;
         
         // Apply inverse coupling transformation
         for (ch_idx, &should_transform) in self.mask.iter().enumerate() {
@@ -190,19 +219,49 @@ impl CouplingBlock {
         (x_id, x_transform)
     }
     
-    /// Compute transformation parameters (stub implementation)
-    fn compute_transform_params(&self, x_id: &Array3<f32>) -> Result<(Array3<f32>, Option<Array3<f32>>)> {
+    /// Compute transformation parameters with FiLM conditioning
+    fn compute_transform_params(&self, x_id: &Array3<f32>, phase_tag: u8) -> Result<(Array3<f32>, Option<Array3<f32>>)> {
         let (c, h, w) = x_id.dim();
         
-        // Stub: simple linear transformation based on input statistics
+        // Get FiLM parameters for this phase tag
+        let film_params = &self.film_table[phase_tag as usize];
+        
+        // Compute base transformation from input statistics
         let mean = x_id.mean().unwrap_or(0.0);
-        let translation = Array3::<f32>::from_elem((c, h, w), mean * 0.1);
+        let base_translation = Array3::<f32>::from_elem((c, h, w), mean * 0.1);
+        
+        // Apply FiLM conditioning: gamma * base + beta
+        let mut translation = Array3::<f32>::zeros((c, h, w));
+        for ch in 0..c {
+            let gamma_ch = film_params.gamma[[ch, 0, 0]];
+            let beta_ch = film_params.beta[[ch, 0, 0]];
+            
+            for i in 0..h {
+                for j in 0..w {
+                    translation[[ch, i, j]] = gamma_ch * base_translation[[ch, i, j]] + beta_ch;
+                }
+            }
+        }
         
         let scale = match self.coupling_type {
             CouplingType::Additive => None,
             CouplingType::Affine => {
                 let std = ((x_id - mean).mapv(|x| x * x).mean().unwrap_or(1.0)).sqrt();
-                Some(Array3::<f32>::from_elem((c, h, w), std * 0.01))
+                let base_scale = Array3::<f32>::from_elem((c, h, w), std * 0.01);
+                
+                // Apply FiLM conditioning to scale as well
+                let mut conditioned_scale = Array3::<f32>::zeros((c, h, w));
+                for ch in 0..c {
+                    let gamma_ch = film_params.gamma[[ch, 0, 0]];
+                    let beta_ch = film_params.beta[[ch, 0, 0]] * 0.1; // Smaller beta for scale
+                    
+                    for i in 0..h {
+                        for j in 0..w {
+                            conditioned_scale[[ch, i, j]] = gamma_ch * base_scale[[ch, i, j]] + beta_ch;
+                        }
+                    }
+                }
+                Some(conditioned_scale)
             }
         };
         
@@ -256,7 +315,7 @@ impl FlowNet {
     ///
     /// # Returns
     /// Encoded latent representation and log-determinant
-    pub fn encode(&self, input: &Array3<f32>, _phase_tag: u8) -> Result<(Array3<f32>, f32)> {
+    pub fn encode(&self, input: &Array3<f32>, phase_tag: u8) -> Result<(Array3<f32>, f32)> {
         if !self.loaded {
             return Err(FlowNetError::ModelNotLoaded);
         }
@@ -267,7 +326,7 @@ impl FlowNet {
         // Apply coupling blocks level by level
         for level_blocks in &self.coupling_blocks {
             for block in level_blocks {
-                let (z_new, log_det) = block.forward(&z)?;
+                let (z_new, log_det) = block.forward(&z, phase_tag)?;
                 z = z_new;
                 total_log_det += log_det;
             }
@@ -284,7 +343,7 @@ impl FlowNet {
     ///
     /// # Returns
     /// Reconstructed data
-    pub fn decode(&self, latent: &Array3<f32>, _phase_tag: u8) -> Result<Array3<f32>> {
+    pub fn decode(&self, latent: &Array3<f32>, phase_tag: u8) -> Result<Array3<f32>> {
         if !self.loaded {
             return Err(FlowNetError::ModelNotLoaded);
         }
@@ -294,7 +353,7 @@ impl FlowNet {
         // Apply coupling blocks in reverse order
         for level_blocks in self.coupling_blocks.iter().rev() {
             for block in level_blocks.iter().rev() {
-                x = block.inverse(&x)?;
+                x = block.inverse(&x, phase_tag)?;
             }
         }
         
@@ -443,12 +502,85 @@ mod tests {
         let block = CouplingBlock::new(CouplingType::Additive, 3, 4);
         let input = Array3::<f32>::from_elem((3, 4, 4), 1.0);
         
-        let (encoded, _log_det) = block.forward(&input).unwrap();
-        let decoded = block.inverse(&encoded).unwrap();
+        let phase_tag = 42; // Test with specific phase tag
+        let (encoded, _log_det) = block.forward(&input, phase_tag).unwrap();
+        let decoded = block.inverse(&encoded, phase_tag).unwrap();
         
         // Should recover input exactly for additive coupling
         for (_i, (&orig, &rec)) in input.iter().zip(decoded.iter()).enumerate() {
             assert_relative_eq!(orig, rec, epsilon = 1e-6);
         }
+    }
+    
+    #[test]
+    #[cfg(feature = "flownet")]
+    fn test_film_conditioning() {
+        use ndarray::Array3;
+        use approx::assert_relative_eq;
+        
+        let block = CouplingBlock::new(CouplingType::Affine, 3, 4);
+        let input = Array3::<f32>::from_elem((3, 4, 4), 0.5);
+        
+        // Test with different phase tags
+        let phase_tag_1 = 0;
+        let phase_tag_2 = 128;
+        let phase_tag_3 = 255;
+        
+        let (encoded_1, _log_det_1) = block.forward(&input, phase_tag_1).unwrap();
+        let (encoded_2, _log_det_2) = block.forward(&input, phase_tag_2).unwrap();
+        let (encoded_3, _log_det_3) = block.forward(&input, phase_tag_3).unwrap();
+        
+        // Different phase tags should produce different outputs
+        let diff_12 = (&encoded_1 - &encoded_2).mapv(|x| x.abs()).sum();
+        let diff_13 = (&encoded_1 - &encoded_3).mapv(|x| x.abs()).sum();
+        let diff_23 = (&encoded_2 - &encoded_3).mapv(|x| x.abs()).sum();
+        
+        assert!(diff_12 > 1e-6, "Phase tags 0 and 128 should produce different outputs");
+        assert!(diff_13 > 1e-6, "Phase tags 0 and 255 should produce different outputs");
+        assert!(diff_23 > 1e-6, "Phase tags 128 and 255 should produce different outputs");
+        
+        // But each should still be invertible
+        let decoded_1 = block.inverse(&encoded_1, phase_tag_1).unwrap();
+        let decoded_2 = block.inverse(&encoded_2, phase_tag_2).unwrap();
+        let decoded_3 = block.inverse(&encoded_3, phase_tag_3).unwrap();
+        
+        // All should recover the original input
+        for (&orig, &rec) in input.iter().zip(decoded_1.iter()) {
+            assert_relative_eq!(orig, rec, epsilon = 1e-5);
+        }
+        for (&orig, &rec) in input.iter().zip(decoded_2.iter()) {
+            assert_relative_eq!(orig, rec, epsilon = 1e-5);
+        }
+        for (&orig, &rec) in input.iter().zip(decoded_3.iter()) {
+            assert_relative_eq!(orig, rec, epsilon = 1e-5);
+        }
+    }
+    
+    #[test]
+    #[cfg(feature = "flownet")]
+    fn test_film_broadcast_shapes() {
+        use ndarray::Array3;
+        
+        let block = CouplingBlock::new(CouplingType::Additive, 3, 2);
+        
+        // Test that FiLM parameters broadcast correctly across spatial dimensions
+        let input_small = Array3::<f32>::from_elem((3, 2, 2), 1.0);
+        let input_large = Array3::<f32>::from_elem((3, 8, 8), 1.0);
+        
+        let phase_tag = 100;
+        
+        // Should work with different spatial sizes
+        let (encoded_small, _) = block.forward(&input_small, phase_tag).unwrap();
+        let (encoded_large, _) = block.forward(&input_large, phase_tag).unwrap();
+        
+        assert_eq!(encoded_small.shape(), &[3, 2, 2]);
+        assert_eq!(encoded_large.shape(), &[3, 8, 8]);
+        
+        // Verify invertibility for both sizes
+        let decoded_small = block.inverse(&encoded_small, phase_tag).unwrap();
+        let decoded_large = block.inverse(&encoded_large, phase_tag).unwrap();
+        
+        assert_eq!(decoded_small.shape(), input_small.shape());
+        assert_eq!(decoded_large.shape(), input_large.shape());
     }
 } 
