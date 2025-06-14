@@ -2,11 +2,16 @@
 
 add_executable(rzp_cli_test cli_roundtrip.cpp)
 
+add_executable(rzp_integrity_test integrity_check.cpp)
+
 target_compile_definitions(rzp_cli_test PRIVATE RZP_BIN_PATH="$<TARGET_FILE:rzp>")
 
 target_link_libraries(rzp_cli_test PRIVATE ledgerizer)
 
 add_test(NAME rzp_cli_roundtrip COMMAND rzp_cli_test)
+target_compile_definitions(rzp_integrity_test PRIVATE RZP_BIN_PATH="$<TARGET_FILE:rzp>")
+target_link_libraries(rzp_integrity_test PRIVATE ledgerizer)
+add_test(NAME rzp_integrity_check COMMAND rzp_integrity_test)
 
 file(WRITE ${CMAKE_CURRENT_BINARY_DIR}/png_1x1.hex "89504E470D0A1A0A0000000D49484452000000010000000108060000001F15C4890000000A49444154789C63600000020001E221BC330000000049454E44AE426082")
 
